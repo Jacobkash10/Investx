@@ -1,0 +1,269 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String    @id
+  name              String
+  email             String
+  emailVerified     Boolean   @default(false)
+  image             String?
+  preferredCurrency String    @default("USD")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sessions          Session[]
+  accounts          Account[]
+
+  wallet             Wallet?
+  positions          Position[]
+  orders             Order[]
+  transactions       Transaction[]
+  alerts             PriceAlert[]
+  notifications      Notification[]
+  watchlists         Watchlist[]
+  portfolioSnapshots PortfolioSnapshot[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Wallet {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  cashBalance Decimal  @default(100000.00) @db.Decimal(18, 2)
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallet")
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  ticker    String    @unique
+  name      String
+  currency  String    @default("USD")
+  exchange  String?
+  type      AssetType @default(STOCK)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  positions    Position[]
+  orders       Order[]
+  transactions Transaction[]
+  alerts       PriceAlert[]
+  watchlists   Watchlist[]
+
+  @@map("asset")
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String
+  quantity  Decimal  @db.Decimal(18, 6)
+  avgPrice  Decimal  @db.Decimal(18, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@map("position")
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  userId        String
+  assetId       String
+  side          OrderSide
+  orderType     OrderType
+  quantity      Decimal     @db.Decimal(18, 6)
+  limitPrice    Decimal?    @db.Decimal(18, 4)
+  executedPrice Decimal?    @db.Decimal(18, 4)
+  status        OrderStatus @default(PENDING)
+  createdAt     DateTime    @default(now())
+  executedAt    DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([assetId])
+  @@map("order")
+}
+
+model Transaction {
+  id             String    @id @default(cuid())
+  userId         String
+  orderId        String
+  assetId        String
+  side           OrderSide
+  quantity       Decimal   @db.Decimal(18, 6)
+  unitPrice      Decimal   @db.Decimal(18, 4)
+  totalAmount    Decimal   @db.Decimal(18, 2)
+  realizedProfit Decimal?  @db.Decimal(18, 2)
+  currency       String    @default("USD")
+  createdAt      DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([assetId])
+  @@map("transaction")
+}
+
+model PriceAlert {
+  id          String         @id @default(cuid())
+  userId      String
+  assetId     String
+  targetPrice Decimal        @db.Decimal(18, 4)
+  direction   AlertDirection
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([assetId])
+  @@map("price_alert")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("PRICE_ALERT")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notification")
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  assetId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@index([userId])
+  @@index([assetId])
+  @@map("watchlist")
+}
+
+model PortfolioSnapshot {
+  id             String   @id @default(cuid())
+  userId         String
+  cashBalance    Decimal  @db.Decimal(18, 2)
+  portfolioValue Decimal  @db.Decimal(18, 2)
+  totalValue     Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("portfolio_snapshot")
+}
+
+enum AssetType {
+  STOCK
+  CRYPTO
+  ETF
+  FOREX
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  EXECUTED
+  CANCELLED
+  REJECTED
+}
+
+enum AlertDirection {
+  ABOVE
+  BELOW
+}
